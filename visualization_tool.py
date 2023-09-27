@@ -25,7 +25,10 @@ from scipy.stats import rankdata
 from visualization_utils import (create_directories_session_data,
                                  create_directories_session_popup,
                                  create_fig_line, get_popup, read_param_EDA,
-                                 save_data_filtered)
+                                 save_data_filtered, create_directories_session_data_csv)
+
+from avroPreprocess import Avro_to_Json_Convert as avro
+from avroPreprocess import Json_to_Csv_Convert as json
 
 # ================================ #
 # Definition of panels and widgets #
@@ -45,7 +48,10 @@ text_title_session = pn.widgets.StaticText()
 # Selezione della directory
 selected_path_directory = None
 def handle_upload(event):
-    dir_input_btn.save('data.zip')
+    if dir_input_btn.filename.endswith('.avro'):
+        dir_input_btn.save('data.avro')
+    else:
+        dir_input_btn.save('data.zip')
     select_directory()
 
 dir_input_btn = pn.widgets.FileInput(accept='.zip', sizing_mode="stretch_width")
@@ -80,13 +86,22 @@ def select_directory():
     # Questo metodo permette di selezionare la cartella
     global selected_path_directory
     global text_title_student
-
-    zipname = "./data.zip"
+    
     dirname = "./data"
-    with zipfile.ZipFile(zipname, 'r') as zip_ref:
-        zip_ref.extractall(dirname)
+    uploaded_file = dir_input_btn.filename
+    
+    if uploaded_file.endswith('.zip'):
+        zipname = "./data.zip"
+        with zipfile.ZipFile(zipname, 'r') as zip_ref:
+            zip_ref.extractall(dirname)
+        
+    elif uploaded_file.endswith('.avro'):
+        avroname = "./data.avro"
+        avro.convert_avro_to_json(avroname)
+        dirname = json.convert_json_to_csv("output.json", dirname)
+        
     if dirname:
-        selected_path_directory = dirname
+            selected_path_directory = dirname
 
     prepare_files(selected_path_directory)
 
@@ -134,10 +149,16 @@ def prepare_files(path):
     os.mkdir(path_student)
 
     shutil.copytree(path + "/Data", path_student + "/Data")
-    shutil.copytree(path + "/Popup", path_student + "/Popup")
+    
 
-    create_directories_session_data(path_student)
-    create_directories_session_popup(path_student)
+    uploaded_file = dir_input_btn.filename
+    
+    if(uploaded_file.endswith('.zip')):
+        shutil.copytree(path + "/Popup", path_student + "/Popup")
+        create_directories_session_data(path_student)
+        create_directories_session_popup(path_student)
+    if(uploaded_file.endswith('.avro')):
+        create_directories_session_data_csv(path_student)
 
     button_analyse.disabled = False
 
