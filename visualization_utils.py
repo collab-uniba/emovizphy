@@ -2,7 +2,7 @@ import configparser
 import datetime
 import os
 import zipfile
-
+import shutil
 import numpy as np
 import pandas as pd
 from bokeh.models import (ColumnDataSource, DatetimeTickFormatter, HoverTool,
@@ -15,8 +15,9 @@ from signalPreprocess import EDA_Artifact_Detection_Script as eda_artifact
 from signalPreprocess import EDA_Peak_Detection_Script as eda_peak
 
 
-def classify_artifacts(eda, acc,temp, fullOutputPath, ouput_path):
-    labels, data = eda_artifact.classify(constant.classifierList, eda, acc, temp)
+#def classify_artifacts(eda, acc,temp, fullOutputPath, ouput_path):
+def classify_artifacts(eda,fullOutputPath, ouput_path):
+    labels, data = eda_artifact.classify(constant.classifierList, eda)
 
     featureLabels = pd.DataFrame(labels, index=pd.date_range(start=data.index[0], periods=len(labels), freq='5s'),
                       columns=constant.classifierList)
@@ -165,11 +166,11 @@ def process_hr(path_session):
 
 def get_session_EDA_ACC_TEMP(path_session):
     EDA_df = pd.read_csv(path_session + '/Data/' + 'EDA.csv')
-    ACC_df = pd.read_csv(path_session + '/Data/' + 'ACC.csv')
-    TEMP_df = pd.read_csv(path_session + '/Data/' + 'TEMP.csv')
+    #ACC_df = pd.read_csv(path_session + '/Data/' + 'ACC.csv')
+    #TEMP_df = pd.read_csv(path_session + '/Data/' + 'TEMP.csv')
 
 
-    return EDA_df, ACC_df, TEMP_df
+    return EDA_df#, ACC_df, TEMP_df
 
 
 def save_EDAs_filtered(path_days, thresh, offset, start_WT, end_WT):
@@ -179,11 +180,12 @@ def save_EDAs_filtered(path_days, thresh, offset, start_WT, end_WT):
         sessions = os.listdir(path_sessions)
         for s in sessions:
             path_session = path_days + '/' + d  + '/' + s
-            EDA, ACC, TEMP = get_session_EDA_ACC_TEMP(path_session)
+            #EDA, ACC, TEMP = get_session_EDA_ACC_TEMP(path_session)
+            EDA= get_session_EDA_ACC_TEMP(path_session)
             artifact_file = os.path.join(constant.artifact_output_path, "artifact_detected.csv")
             output_file_path = os.path.join(constant.artifact_output_path, "result.csv")
-            classify_artifacts(EDA, ACC, TEMP, artifact_file, output_file_path)
-
+            #classify_artifacts(EDA, ACC, TEMP, artifact_file, output_file_path)
+            classify_artifacts(EDA, artifact_file, output_file_path)
             data = detect_peak(output_file_path, artifact_file, thresh, offset, start_WT, end_WT)
             data.reset_index(inplace=True, drop=True)
             data['timestamp'] = pd.to_datetime(data['timestamp'])\
@@ -372,7 +374,45 @@ def create_directories_session_data(dir_path):
 
         with zipfile.ZipFile(dir_path + '/Data/' + session_name, "r") as zip_ref:
             zip_ref.extractall(dir_data_session)
+        
+def create_directories_session_data_csv(dir_path): 
+    # Ottieni tutti i nomi dei file CSV (sessions)
+    csv_files_session = []
+    for file in os.listdir(dir_path  + '/Data'):
+        if file.endswith(".csv"):
+            print(file)
+            csv_files_session.append(file)
+    temp_path = dir_path  + '/Data'
+    for session_name in csv_files_session:
+        timestamp_session = pd.read_csv(os.path.join(temp_path,session_name), header=None).iloc[0, 0]
+        timestamp_session = int(timestamp_session)
+        print("timestampsession", timestamp_session)
+        
+        date_time_session = datetime.datetime.fromtimestamp(timestamp_session)
+        print("datetimesession", date_time_session)
+        
+        dir_day = dir_path + '/Sessions/' + datetime.datetime.strftime(date_time_session, format='%d-%m-%Y')
+        print("dir day",dir_day)
+        
+        # Lascia il timestamp come nome delle cartelle. È necessario per capire quando è stato fatto un popup.
+        # Ad esempio, se una sessione inizia alle 23.50 e un file CSV viene inserito alle 2.00 del giorno dopo,
+        # potrebbe risultare difficile capire che il file CSV appartiene alla sessione del giorno prima.
+        dir_session = dir_day + '/' + str(timestamp_session)
+        print("dir_session",dir_session)
+        
+        if not os.path.exists(dir_session):
+            os.makedirs(dir_session)
 
+        dir_data_session = dir_session + '/' + 'Data/'
+        print("dir data session", dir_data_session)
+        
+        if not os.path.exists(dir_data_session):
+            os.makedirs(dir_data_session)
+        
+        # Sposta il file CSV nella directory della sessione
+        src_csv_file = os.path.join(temp_path,session_name)
+        dest_csv_file = os.path.join(dir_data_session, session_name)
+        shutil.move(src_csv_file, dest_csv_file)
 
 def create_directories_session_popup(dir_path):
     # Ad ogni inserimento di popup viene creato un file che contiene tutti i popup, non solo quelli nuovi
