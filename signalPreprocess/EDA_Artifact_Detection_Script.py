@@ -207,8 +207,8 @@ def getSVMFeatures(key):
         print('Error!! Invalid key, choose "Binary" or "Multiclass"\n\n')
         return
 
-
-def classify(classifierList, eda, acc, temp):
+#def classify(classifierList, eda, acc, temp):
+def classify(classifierList, eda):
     '''
     This function wraps other functions in order to load, classify, and return the label for each 5 second epoch of Q sensor data.
 
@@ -223,8 +223,8 @@ def classify(classifierList, eda, acc, temp):
     fiveSec = 8 * 5
 
     # Load data
-
-    data = getInputLoadFile(eda, acc, temp)
+    #data = getInputLoadFile(eda, acc, temp)
+    data = getInputLoadFile(eda)
 
     # Get pickle List and featureNames list
     featureNameList = [[]] * len(classifierList)

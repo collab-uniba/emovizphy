@@ -5,15 +5,17 @@ import numpy as np
 
 
 def get_user_input(prompt):
-    try:
-        return raw_input(prompt)
-    except NameError:
-        return input(prompt)
+    return input(prompt)
+    #try:
+    #    return raw_input(prompt)
+    #except NameError:
+    #    return input(prompt)
 
+#def getInputLoadFile(eda, acc, temp):
+def getInputLoadFile(eda):
 
-def getInputLoadFile(eda, acc, temp):
-
-    data = loadData_E4(eda, acc, temp)
+    #data = loadData_E4(eda, acc, temp)
+    data = loadData_E4(eda)
     return data
 
 
@@ -36,8 +38,16 @@ def _loadSingleFile_E4(data, list_of_columns, expected_sample_rate, freq):
 
     return data
 
+def loadData_E4(eda_file):
+    # Load EDA data
+    eda_data = _loadSingleFile_E4(eda_file, ["EDA"], 4, "250L")
 
-def loadData_E4(eda_file, acc_file, temperature_file):
+    # Get the filtered data using a low-pass butterworth filter (cutoff:1hz, fs:8hz, order:6)
+    eda_data['filtered_eda'] = butter_lowpass_filter(eda_data['EDA'], 1.0, 8, 6)
+
+    return eda_data
+
+'''def loadData_E4(eda_file, acc_file, temperature_file):
     # Load EDA data
     eda_data = _loadSingleFile_E4(eda_file, ["EDA"], 4, "250L")
     # Get the filtered data using a low-pass butterworth filter (cutoff:1hz, fs:8hz, order:6)
@@ -58,7 +68,7 @@ def loadData_E4(eda_file, acc_file, temperature_file):
     # E4 sometimes records different length files - adjust as necessary
     min_length = min(len(acc_data), len(eda_data), len(temperature_data))
 
-    return data[:min_length]
+    return data[:min_length]'''
 
 
 
