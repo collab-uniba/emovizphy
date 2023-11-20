@@ -16,7 +16,6 @@ import re
 import shutil
 import zipfile
 from datetime import date as dt
-
 import pandas as pd
 import panel as pn
 from bokeh.models import Span
@@ -29,6 +28,9 @@ from visualization_utils import (create_directories_session_data,
 
 from avroPreprocess import Avro_to_Json_Convert as avro
 from avroPreprocess import Json_to_Csv_Convert as json
+from bokeh.models import Rect 
+from bokeh.models import ColumnDataSource
+
 
 # ================================ #
 # Definition of panels and widgets #
@@ -45,7 +47,7 @@ text_title_day = pn.widgets.StaticText()
 text_title_session = pn.widgets.StaticText()
 
 
-# Selezione della directory
+# Selecting the directory
 selected_path_directory = None
 def handle_upload(event):
     if dir_input_btn.filename.endswith('.avro'):
@@ -63,11 +65,12 @@ dir_input_btn.param.watch(handle_upload, 'filename', onlychanged=True)
 # ========================================================== #
 
 file_name_student = None
-current_session = None  # Timestamp della sessione scelta
-path_student = None  # Path dello studente
-path_days = None  # Path dei giorni di lavoro dello studente
-path_sessions = None  # Path delle sessioni di un giorno di lavoro
-sessions = []  # Lista dei timestamp delle sessioni
+current_session = None # Timestamp of the selected session.
+path_student = None # Path of the student.
+path_days = None # Path of the student's workdays.
+path_sessions = None # Path of the workday sessions.
+sessions = [] # List of timestamps of the sessions.
+uploaded_file = None  # File's name uploaded
 
 # Read config file
 config_data = configparser.ConfigParser()
@@ -83,31 +86,22 @@ pn.extension()
 # ================= #
 
 def select_directory():
-    # Questo metodo permette di selezionare la cartella
+    # this method allows the user to select the directory
     global selected_path_directory
     global text_title_student
-    
+
+    zipname = "./data.zip"
     dirname = "./data"
-    uploaded_file = dir_input_btn.filename
-    
-    if uploaded_file.endswith('.zip'):
-        zipname = "./data.zip"
-        with zipfile.ZipFile(zipname, 'r') as zip_ref:
-            zip_ref.extractall(dirname)
-        
-    elif uploaded_file.endswith('.avro'):
-        avroname = "./data.avro"
-        avro.convert_avro_to_json(avroname)
-        dirname = json.convert_json_to_csv("output.json", dirname)
-        
+    with zipfile.ZipFile(zipname, 'r') as zip_ref:
+        zip_ref.extractall(dirname)
     if dirname:
-            selected_path_directory = dirname
+        selected_path_directory = dirname
 
     prepare_files(selected_path_directory)
 
     global file_name_student
     text_title_student.value = "Directory " + file_name_student + " selected"
-    dir_input_btn.background = "#00A170"
+    dir_input_btn = pn.widgets.FileInput(styles={'background': '#00A170'})
 
     dir_input_btn.aspect_ratio
 
@@ -130,17 +124,19 @@ def reset_widgets():
 
 
 def prepare_files(path):
-    # Questo metodo copia e prepara i file nella cartella temp
+    # this method copies and prepares the files in the temp
     global file_name_student
     # Get file directory
     file_name_student = os.path.basename(path)
 
     path_student = "./temp/" + file_name_student
 
+    # split filename without extension
+    uploaded_file = dir_input_btn.filename.split('.')[0]
     global path_days
     path_days = path_student + "/Sessions"
 
-    # Se esiste già la cartella in temp, la elimino
+    # if exist temp folder, delete it
     if os.path.exists("./temp/"):
         # Delete Folders
         shutil.rmtree("./temp/")
@@ -148,20 +144,17 @@ def prepare_files(path):
     os.mkdir("./temp/")
     os.mkdir(path_student)
 
-    shutil.copytree(path + "/Data", path_student + "/Data")
-    
-
-    uploaded_file = dir_input_btn.filename
-    
-    if(uploaded_file.endswith('.zip')):
+    if uploaded_file == "Data":
+        shutil.copytree(path + "/Data", path_student + "/Data")
         shutil.copytree(path + "/Popup", path_student + "/Popup")
         create_directories_session_data(path_student)
         create_directories_session_popup(path_student)
-    if(uploaded_file.endswith('.avro')):
-        create_directories_session_data_csv(path_student)
+    
+    if uploaded_file != "Data" and os.path.exists(os.path.join("./data", uploaded_file)):
+        shutil.copytree(os.path.join(path, uploaded_file), os.path.join(path_student, uploaded_file))
+        create_directories_session_data_csv(path_student, uploaded_file)
 
     button_analyse.disabled = False
-
 
 def visualize_session(date, session):
     global bokeh_pane_acc
@@ -179,7 +172,7 @@ def visualize_session(date, session):
 
     path_session = "./temp/" + file_name_student + "/Sessions/" + date + "/" + session
 
-    # x_range serve per muovere i grafici insieme sull'asse x
+    # x_range is used to move the graphs together on the x-axis
     x_range = None
     popup = None
     if os.path.exists(path_session + "/Popup"):
@@ -212,17 +205,17 @@ def visualize_session(date, session):
         #     temp["time"] = temp["time"].astype(str)
         #     temp["time"] = pd.to_datetime(temp["time"], format="%H:%M:%S").dt.time
         for t in time_peaks:
-            # Assegnazione arousal
+            # Arousal assignment
             arousal = None
-            # Considero solo i popup fatti prima del picco
+            # considering pop-ups made before the peak
             if popup is not None:
 
                 prev_popup = popup[popup["time"].dt.time < t.time()]
                 prev_popup["time"] = prev_popup["time"].dt.time
 
-                # Considero solo i popup fatti nei precedenti 30 minuti
+                # considering only popups made in the previous 30 minutes
                 if not prev_popup.empty:
-                    # Considero l'ultimo popup fatto nei precedenti 30 minuti
+                    # considering the last popup done in the previous 30 minutes
                     prev_popup = prev_popup.sort_values(by=["time"], ascending=False)
                     prev_popup.reset_index(inplace=True, drop=True)
                     flag = datetime.datetime.combine(
@@ -236,13 +229,13 @@ def visualize_session(date, session):
                         arousal = prev_popup.loc[0, "arousal"]
 
             if arousal is None:
-                color = "#808080"  # Grigio
+                color = "#808080"  # Grey
             elif arousal == "Low 🧘‍♀" or arousal == "Low 😔":
-                color = "#4DBD33"  # Verde
+                color = "#4DBD33"  # Green
             elif arousal == "Medium 😐":
-                color = "#FF8C00"  # Arancione
+                color = "#FF8C00"  # Orange
             else:
-                color = "#FF0000"  # Rosso
+                color = "#FF0000"  # Red
             fig_eda.add_layout(
                 Span(
                     location=t,
@@ -258,6 +251,21 @@ def visualize_session(date, session):
 
         fig_eda.x_range = x_range
         bokeh_pane_eda.object = fig_eda
+    
+        path_tags = os.path.join(path_session, "Data", "tags.csv")
+
+        if os.path.isfile(path_tags) and os.stat(path_tags).st_size > 0:
+            df = pd.read_csv(path_tags, header=None)
+            timestamp_start = df.iloc[0, 0]
+            timestamp_start = pd.to_datetime(int(timestamp_start), unit='s', utc=True).tz_convert("Europe/Berlin").tz_localize(None)
+            eda_subset = data[(data["time"] == timestamp_start)]
+            fig_eda.circle(x="time", y="filtered_eda", source=eda_subset, size=3, color="red")
+            
+            if len(df) >= 2:  # if there are start timestamp and end timestamp
+                timestamp_end = df.iloc[1, 0]
+                timestamp_end = pd.to_datetime(int(timestamp_end), unit='s', utc=True).tz_convert("Europe/Berlin").tz_localize(None)
+                eda_subset_end = data[(data["time"] == timestamp_end)]
+                fig_eda.circle(x="time", y="filtered_eda", source=eda_subset_end, size=3, color="red")
 
     # ACC
     if int(plot["ACC"]) == 1:
@@ -304,11 +312,9 @@ def visualize_session(date, session):
 
     progress_bar.visible = False
 
-    print("Fine")
-
 
 def prepare_sessions(event):
-    # Questo metodo ricava il giorno e la sessione dal valore della select
+    # This method obtains the day and session from the value of the select
     global progress_bar
     progress_bar.visible = True
 
@@ -318,7 +324,7 @@ def prepare_sessions(event):
 
     day = None
 
-    # Ricavare il giorno dalla stringa "Session #: HH:MM:SS"
+    # Get the day from the string "Session #: HH:MM:SS"
     for key, values in groups.items():
         if str(session) in values:
             day = key
@@ -330,7 +336,7 @@ def prepare_sessions(event):
     global sessions
     sessions = os.listdir(path_sessions)
 
-    # Esempio di session: 'Session 2: 12:13:49'
+    # Session example: 'Session 2: 12:13:49'
     num_session = int(re.search(r"\d+", session).group())
 
     global current_session
@@ -356,19 +362,19 @@ def create_select_sessions(event):
     global button_analyse
     global dir_input_btn
 
-    # Disattivo i bottoni
+    # deactivating the buttons
     dir_input_btn.disabled = True
     button_analyse.disabled = True
 
-    # Questo metodo converte i timestamp delle sessioni nella stringa "Session #: HH:MM:SS"
+    # This method converts session timestamps to the string "Session #: HH:MM:SS"
     global path_days
     days = os.listdir(path_days)
 
-    # Dizionario con key: giorno    value: lista di stringhe "Session #: HH:MM:SS"
+    # Dictionary with key: day      value: list of strings "Session #: HH:MM:SS"
     groups = {}
     for d in days:
         sessions = os.listdir(path_days + "/" + str(d))
-        # Converto i timestamp delle sessioni in numero della sessione nella giornata
+        # convert session timestamps to session number in the day
         dt_objects_list = [datetime.datetime.fromtimestamp(int(t)) for t in sessions]
         dt_objects_list = pd.Series(dt_objects_list)
         dt_objects_list = dt_objects_list.dt.tz_localize("UTC").dt.tz_convert("Europe/Berlin")
@@ -391,7 +397,7 @@ def create_select_sessions(event):
     text_title_student.value = "Analysing " + file_name_student
     save_data_filtered(path_days, thresh, offset, start_WT, end_WT)
 
-    # Visualizza la prima sessione
+    # view the first session
     prepare_sessions(event)
 
     dir_input_btn.disabled = False
@@ -406,7 +412,7 @@ def create_select_sessions(event):
 #######                 #######
 #######                 #######
 
-# Button per confermare lo studente
+# Button to confirm the student
 button_analyse = pn.widgets.Button(
     name="Analyse biometrics",
     button_type="primary",
@@ -420,13 +426,13 @@ progress_bar = pn.indicators.Progress(
     name="Progress", visible=False, active=True, sizing_mode="stretch_width"
 )
 
-# Selezione della sessione
+# Session selection
 select = pn.widgets.Select(
     name="Select Session", options=sessions, disabled=True, sizing_mode="stretch_width"
 )
 
 
-# Button per visualizzare la sessione
+# Button to view the session
 button_visualize = pn.widgets.Button(
     name="Visualize session",
     button_type="primary",
@@ -451,8 +457,7 @@ title = pn.Row(
 template.header.append(title)
 
 # Main
-# Il  numero di panel mostrati è uguale al numero di segnali da mostrare. Se ad esempio, nel file config EDA è
-# disattivato, allora bisogna rimuovere il suo panel
+# The number of panels shown is equal to the number of signals to show. For example, if EDA is deactivated in the config file, then its panel must be removed
 show_bokeh_pane = []
 if int(plot["EDA"]) == 1:
     show_bokeh_pane.append(bokeh_pane_eda)
@@ -463,7 +468,7 @@ if int(plot["ACC"]) == 1:
 
 size = 2
 for i in range(len(show_bokeh_pane)):
-    # 12 è il massimo
+    # a maximum of 12 panels can be shown
     template.main[(i * size) : (i * size) + size, :] = show_bokeh_pane[i]
 
 
