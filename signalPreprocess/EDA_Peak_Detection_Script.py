@@ -29,7 +29,7 @@ def findPeaks(data, offset, start_WT, end_WT, thresh=0, sampleRate=SAMPLE_RATE):
         max_deriv:           list of floats, max derivative within 1 second of apex of SCR
 
     '''
-    EDA_deriv = data['filtered_eda'][1:].values - data['filtered_eda'][:-1].values
+    EDA_deriv = data['EDA'][1:].values - data['EDA'][:-1].values
 
     peaks = np.zeros(len(EDA_deriv))
     peak_sign = np.sign(EDA_deriv)
@@ -62,7 +62,7 @@ def findPeaks(data, offset, start_WT, end_WT, thresh=0, sampleRate=SAMPLE_RATE):
                     found = True
                     peak_start[find_start] = 1
                     peak_start_times[i] = data.index[find_start]
-                    rise_time[i] = get_seconds_and_microseconds(data.index[i] - pd.to_datetime(peak_start_times[i]))
+                    rise_time[i] = get_seconds_and_microseconds(pd.to_datetime(data.index[i]) - pd.to_datetime(peak_start_times[i]))
 
                 find_start = find_start - 1
 
@@ -73,7 +73,7 @@ def findPeaks(data, offset, start_WT, end_WT, thresh=0, sampleRate=SAMPLE_RATE):
                 rise_time[i] = start_WT
 
             # Check if amplitude is too small
-            if thresh > 0 and (data['filtered_eda'].iloc[i] - data['filtered_eda'][peak_start_times[i]]) < thresh:
+            if thresh > 0 and (data['EDA'].iloc[i] - data['EDA'][peak_start_times[i]]) < thresh:
                 peaks[i] = 0
                 peak_start[i] = 0
                 peak_start_times[i] = ''
@@ -90,8 +90,8 @@ def findPeaks(data, offset, start_WT, end_WT, thresh=0, sampleRate=SAMPLE_RATE):
 
     for i in range(0, len(peaks)):
         if peaks[i] == 1:
-            peak_amp = data['filtered_eda'].iloc[i]
-            start_amp = data['filtered_eda'][peak_start_times[i]]
+            peak_amp = data['EDA'].iloc[i]
+            start_amp = data['EDA'][peak_start_times[i]]
             amplitude[i] = peak_amp - start_amp
 
             half_amp = amplitude[i] * .5 + start_amp
@@ -100,7 +100,7 @@ def findPeaks(data, offset, start_WT, end_WT, thresh=0, sampleRate=SAMPLE_RATE):
             find_end = i
             # has to decay within end_WT seconds
             while found == False and find_end < (i + end_WT * sampleRate) and find_end < len(peaks):
-                if data['filtered_eda'].iloc[find_end] < half_amp:
+                if data['EDA'].iloc[find_end] < half_amp:
                     found = True
                     peak_end[find_end] = 1
                     peak_end_times[i] = data.index[find_end]
@@ -112,7 +112,7 @@ def findPeaks(data, offset, start_WT, end_WT, thresh=0, sampleRate=SAMPLE_RATE):
                     find_rise = i
                     found_rise = False
                     while not found_rise:
-                        if data['filtered_eda'].iloc[find_rise] < half_amp:
+                        if data['EDA'].iloc[find_rise] < half_amp:
                             found_rise = True
                             half_rise[i] = data.index[find_rise]
                             SCR_width[i] = get_seconds_and_microseconds(
@@ -127,7 +127,7 @@ def findPeaks(data, offset, start_WT, end_WT, thresh=0, sampleRate=SAMPLE_RATE):
 
             # If we didn't find an end
             if found == False:
-                min_index = np.argmin(data['filtered_eda'].iloc[i:(i + end_WT * sampleRate)].tolist())
+                min_index = np.argmin(data['EDA'].iloc[i:(i + end_WT * sampleRate)].tolist())
                 peak_end[i + min_index] = 1
                 peak_end_times[i] = data.index[i + min_index]
 
@@ -159,7 +159,7 @@ def calcPeakFeatures(data, outfile, offset, thresh, start_WT, end_WT):
     data['SCR_width'] = returnedPeakData[9]
 
     # To keep all filtered data remove this line
-    featureData = data[data.peaks == 1][['filtered_eda', 'rise_time', 'max_deriv', 'amp', 'decay_time', 'SCR_width']]
+    featureData = data[data.peaks == 1][['EDA', 'rise_time', 'max_deriv', 'amp', 'decay_time', 'SCR_width']]
 
     # Replace 0s with NaN, this is where the 50% of the peak was not found, too close to the next peak
     featureData[['SCR_width', 'decay_time']] = featureData[['SCR_width', 'decay_time']].replace(0, np.nan)

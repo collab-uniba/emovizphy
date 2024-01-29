@@ -2,6 +2,7 @@ import configparser
 import datetime
 import os
 import zipfile
+from sys import platform
 
 import numpy as np
 import pandas as pd
@@ -77,7 +78,8 @@ def uniform_csv(filename):
 
 def calculate_date_time(timestamp_0, hz, num_rows):
     format = "%d/%m/%Y, %H:%M:%S"
-    date_time_0 = datetime.datetime.fromtimestamp(timestamp_0)
+    date_time_0 = datetime.datetime.fromtimestamp(float(timestamp_0))
+
     #Change datatime format
     date_time_0_str = date_time_0.strftime(format)
     date_time_0 = datetime.datetime.strptime(date_time_0_str, format)
@@ -106,8 +108,13 @@ def popup_process(path_popup):
                      (frame['arousal'] == 4.0) | (frame['arousal'] == 5.0)),
          ((frame['valence'] == 1.0) | (frame['valence'] == 2.0)) & (
                      (frame['arousal'] == 1.0) | (frame['arousal'] == 2.0)),
-         (frame['arousal'] == 3.0)],
-        ['Low 🧘‍♀', 'High 🤩', 'High 😤', 'Low 😔', 'Medium 😐'], default='Unknown'
+        (frame['valence'] == 3.0)  & (
+                     (frame['arousal'] == 1.0) | (frame['arousal'] == 2.0)),       
+        (frame['valence'] == 3.0)  & (
+                     (frame['arousal'] == 4.0) | (frame['arousal'] == 5.0)),                   
+         (frame['arousal'] == 3.0),   
+         ],
+        ['Low 🧘‍♀', 'High 🤩', 'High 😤', 'Low 😔','Low 😴', 'High 👀', 'Medium 😐'], default='Neutral'
     )
     convert_to_discrete(frame, 'valence')
     convert_to_discrete(frame, 'dominance')
@@ -138,7 +145,7 @@ def get_popup(path_session, date):
 
     popup["time"] = popup["time"].dt.tz_localize("UTC").dt.tz_convert("Europe/Berlin")
     # print("\n\nPARSED TIMESTAMP (localized)")
-    # print(popup['time'])
+    print(popup['time'])
 
     # popup['time'] = popup['time'].apply(lambda x: x.time())
     return popup
@@ -163,23 +170,30 @@ def process_hr(path_session):
 
     return df_hr
 
+
+
 def get_session_EDA_ACC_TEMP(path_session):
-    EDA_df = pd.read_csv(path_session + '/Data/' + 'EDA.csv')
-    ACC_df = pd.read_csv(path_session + '/Data/' + 'ACC.csv')
-    TEMP_df = pd.read_csv(path_session + '/Data/' + 'TEMP.csv')
+    EDA_df = pd.read_csv(path_session + '/Data/' + 'EDA.csv', names=['EDA'])
+    timestamp_0 = EDA_df['EDA'].iloc[0]
+
+    startTime = datetime.datetime.fromtimestamp(float(timestamp_0))
+    
+    EDA_df = EDA_df[EDA_df.index != 0]
+    EDA_df.index = EDA_df.index - 1
+    EDA_df.index = pd.date_range(start=startTime, periods=len(EDA_df), freq='250L')
+    #ACC_df = pd.read_csv(path_session + '/Data/' + 'ACC.csv')
+    #TEMP_df = pd.read_csv(path_session + '/Data/' + 'TEMP.csv')
+    return EDA_df
 
 
-    return EDA_df, ACC_df, TEMP_df
-
-
-def save_EDAs_filtered(path_days, thresh, offset, start_WT, end_WT):
+#def save_EDAs_filtered(path_days, thresh, offset, start_WT, end_WT):
     days = os.listdir(path_days)
     for d in days:
         path_sessions = path_days + '/' + d + '/'
         sessions = os.listdir(path_sessions)
         for s in sessions:
             path_session = path_days + '/' + d  + '/' + s
-            EDA, ACC, TEMP = get_session_EDA_ACC_TEMP(path_session)
+            EDA = get_session_EDA_ACC_TEMP(path_session)
             artifact_file = os.path.join(constant.artifact_output_path, "artifact_detected.csv")
             output_file_path = os.path.join(constant.artifact_output_path, "result.csv")
             classify_artifacts(EDA, ACC, TEMP, artifact_file, output_file_path)
@@ -191,9 +205,22 @@ def save_EDAs_filtered(path_days, thresh, offset, start_WT, end_WT):
                                   .dt.tz_convert('Europe/Berlin')
 
 
-            data.to_csv(path_session + '/Data/data_eda_filtered.csv', index=False)
+            data.to_csv(path_session + '/Data/df_data_eda_filtered.csv', index=False)
 
-
+def save_EDAs_filtered(path_days, thresh, offset, start_WT, end_WT):
+    days = os.listdir(path_days)
+    for d in days:
+        path_sessions = path_days + '/' + d + '/'
+        sessions = os.listdir(path_sessions)
+        for s in sessions:
+            path_session = path_days + '/' + d  + '/' + s
+            EDA = get_session_EDA_ACC_TEMP(path_session)
+            print(EDA)
+            #EDA = process_eda(path_session)
+            fullOutputPath = r"./temp" + "/result_peak.csv"
+            eda_peak.calcPeakFeatures(EDA, fullOutputPath, int(offset), float(thresh), int(start_WT), int(end_WT))
+            EDA['timestamp'] = EDA.index
+            EDA.to_csv(path_session + '/Data/df_data_eda_filtered.csv', index=False)
 
 
 
@@ -254,7 +281,7 @@ def read_param_EDA():
 
 
 def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
-    fig_sign = figure(plot_height=400, x_axis_type='datetime',
+    fig_sign = figure(height=400, x_axis_type='datetime',
                     title=title, x_axis_label='Time', y_axis_label=y_axis_label,
                     sizing_mode='stretch_both', tools = ['pan', 'xpan', 'box_zoom' ,'reset', 'save'])
 
@@ -357,8 +384,9 @@ def create_directories_session_data(dir_path):
     for session_name in zip_files_session:
         timestamp_session = int(session_name.rsplit('_')[0])
 
-        date_time_session = datetime.datetime.fromtimestamp(timestamp_session)
+        date_time_session = datetime.datetime.fromtimestamp(float(timestamp_session)) 
         dir_day = dir_path + '/Sessions/' + datetime.datetime.strftime(date_time_session, format='%d-%m-%Y')
+        
 
         #time = str(date_time_session.time()).replace(':', '')
         # Lasciare il timestamp come nome delle cartelle. è necessario per capire quando è stato fatto un popup.
@@ -435,7 +463,7 @@ def get_date_session_popup(timestamp, path_sessions):
     #Datetime del popup
     date_time_popup = datetime.datetime.fromtimestamp(int(timestamp))
     date_popup = datetime.datetime.strftime(date_time_popup, format='%d-%m-%Y')
-
+    print(date_popup)
     #Date delle sessioni
     dates = os.listdir(path_sessions)
     dates.sort(key=lambda date: datetime.datetime.strptime(date, "%d-%m-%Y"))

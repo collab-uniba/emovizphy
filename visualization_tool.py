@@ -17,6 +17,7 @@ import shutil
 import zipfile
 from datetime import date as dt
 
+from sys import platform
 import pandas as pd
 import panel as pn
 from bokeh.models import Span
@@ -81,14 +82,20 @@ def select_directory():
     global selected_path_directory
     global text_title_student
 
+    if os.path.exists("./data/"):
+        # Delete Folders
+        shutil.rmtree("./data/")
+
     zipname = "./data.zip"
     dirname = "./data"
-    with zipfile.ZipFile(zipname, 'r') as zip_ref:
+    with zipfile.ZipFile(zipname, 'r') as zip_ref:       
         zip_ref.extractall(dirname)
     if dirname:
         selected_path_directory = dirname
 
+    print("Selected directory: " + selected_path_directory)
     prepare_files(selected_path_directory)
+
 
     global file_name_student
     text_title_student.value = "Directory " + file_name_student + " selected"
@@ -168,21 +175,21 @@ def visualize_session(date, session):
     if int(plot["EDA"]) == 1:
         bokeh_pane_eda.visible = True
 
-        data = pd.read_csv(path_session + "/Data/data_eda_filtered.csv")
+        data = pd.read_csv(path_session + "/Data/df_data_eda_filtered.csv")
 
         data["time"] = pd.to_datetime(data["timestamp"])
         data["time"] = data["time"].values.astype("datetime64[s]")
         data["time"] = data["time"].dt.tz_localize("UTC").dt.tz_convert("Europe/Berlin")
         data["time"] = data["time"].dt.tz_localize(None)
 
-        data = data[["time", "filtered_eda", "peaks"]]
-
+        data = data[["time", "EDA", "peaks"]]
+        print(data)
         fig_eda = create_fig_line(
-            data, "time", "filtered_eda", "Electrodermal Activity", "μS", "EDA", popup
+            data, "time", "EDA", "Electrodermal Activity", "μS", "EDA", popup
         )
 
         # Add the peak markers to the figure
-        peak_height = data["filtered_eda"].max() * 1.15
+        peak_height = data["EDA"].max() * 1.15
         data["peaks_plot"] = data["peaks"] * peak_height
         time_peaks = data[data["peaks_plot"] != 0]["time"]
 
@@ -347,8 +354,13 @@ def create_select_sessions(event):
     groups = {}
     for d in days:
         sessions = os.listdir(path_days + "/" + str(d))
+        print(platform)
         # Converto i timestamp delle sessioni in numero della sessione nella giornata
+        
         dt_objects_list = [datetime.datetime.fromtimestamp(int(t)) for t in sessions]
+
+
+        
         dt_objects_list = pd.Series(dt_objects_list)
         dt_objects_list = dt_objects_list.dt.tz_localize("UTC").dt.tz_convert("Europe/Berlin")
         dt_objects_list = dt_objects_list.dt.tz_localize(None)
@@ -458,3 +470,5 @@ pn.serve(
     http_server_kwargs={'max_buffer_size': MAX_SIZE_MB*1024*1014}
 )
 print("Reach the application at http://localhost:20000")
+
+#template.servable()
