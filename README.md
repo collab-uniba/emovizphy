@@ -10,30 +10,20 @@ If you need to install Docker, please refer to the [official guide](https://docs
 
 To run EmoVizPhy, first pull the image from the GitHub Container Registry:
 
-- for Mac computers with Apple Silicon processors (e.g., M1):
+- for Windows computers with with 64-bit processors:
 
   ```shell
-  docker pull ghcr.io/collab-uniba/stressawareness:arm64-latest
+  docker pull ghcr.io/collab-uniba/emovizphy:arm64-latest
   ```
 
-- for Windows computers with 64-bit processors:
-
-  ```shell
-  docker pull ghcr.io/collab-uniba/stressawareness:win64-latest
-  ```
 
 Then, run the image in a Docker container:
 
-- for Mac computers with Apple Silicon processors (e.g., M1):
-
-  ```shell
-  docker run --rm -it -p 20000:20000 ghcr.io/collab-uniba/stressawareness:arm64-latest
-  ```
 
 - for Windows computers with 64-bit processors:
 
   ```shell
-  docker run --rm -it -p 20000:20000 ghcr.io/collab-uniba/stressawareness:win64-latest
+  docker run --rm -it -p 20000:20000 ghcr.io/collab-uniba/stressawareness:arm64-latest
   ```
 
 Once the container is running, your terminal will display the URL to access the EmoVizPhy web interface:
@@ -64,10 +54,7 @@ with write permissions on the [collab-uniba GitHub organization](https://github.
    (replace the example tag – i.e., `arm64-latest` – with the desired tag for the new image version):
 
     ```shell
-    docker build \
-    --label "org.opencontainers.image.source=https://github.com/collab-uniba/stress_awareness" \
-    --label "org.opencontainers.image.description=Visualization tool for biometric data." \
-    --pull --rm -f "Dockerfile" -t ghcr.io/collab-uniba/stressawareness:arm64-latest "."
+    docker build label "org.opencontainers.image.source=https://github.com/collab-uniba/emovizphy" label "org.opencontainers.image.description=Visualization tool for biometric data." pull --rm -f "Dockerfile" -t ghcr.io/collab-uniba/emovizphy:arm64-latest "."
     ```
 
 2. Push the newly created image to the GitHub Container Registry
